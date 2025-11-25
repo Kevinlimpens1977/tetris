@@ -64,7 +64,15 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onBack, o
         if (dbError) throw dbError;
       }
 
+      // 3. Check for session (Auto-login if confirmation disabled)
+      if (authData.session) {
+        // App.tsx auth listener will handle redirect to TITLE
+        return;
+      }
+
+      // 4. If no session, show success screen (Email confirmation required)
       setSuccess(true);
+
     } catch (err: any) {
       console.error('Registration error:', err);
       setError(err.message || 'Er ging iets mis bij het registreren.');

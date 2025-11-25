@@ -52,34 +52,23 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLoginSuccess, onFor
         setShowResendConfirmation(false);
 
         try {
-            const { data, error: loginError } = await supabase.auth.signInWithPassword({
+            const { data, error } = await supabase.auth.signInWithPassword({
                 email,
                 password
             });
 
-            if (loginError) {
-                // Check if it's an email not confirmed error
-                if (loginError.message.toLowerCase().includes('email not confirmed')) {
-                    setShowResendConfirmation(true);
-                    setError('Je email is nog niet geverifieerd. Check je inbox of vraag een nieuwe bevestigingsmail aan.');
-                } else {
-                    throw loginError;
-                }
-                setLoading(false);
-                return;
-            }
+            if (error) throw error;
 
-            if (!data.user?.email_confirmed_at) {
-                setShowResendConfirmation(true);
-                setError('Je email is nog niet geverifieerd. Check je inbox of vraag een nieuwe bevestigingsmail aan.');
-                setLoading(false);
-                return;
+            if (data.user) {
+                onLoginSuccess();
             }
-
-            onLoginSuccess();
         } catch (err: any) {
             console.error('Login error:', err);
-            setError(err.message || 'Inloggen mislukt. Controleer je gegevens.');
+            setError(err.message || 'Kon niet inloggen.');
+            // Check for specific error messages related to email confirmation
+            if (err.message && (err.message.includes('Email not confirmed') || err.message.includes('confirm'))) {
+                setShowResendConfirmation(true);
+            }
         } finally {
             setLoading(false);
         }
