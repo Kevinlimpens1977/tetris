@@ -5,7 +5,9 @@ export enum GameState {
   REGISTRATION = 'REGISTRATION',
   TITLE = 'TITLE',
   PLAYING = 'PLAYING',
-  GAME_OVER = 'GAME_OVER'
+  LEVEL_UP = 'LEVEL_UP',
+  GAME_OVER = 'GAME_OVER',
+  RESET_PASSWORD = 'RESET_PASSWORD'
 }
 
 export interface UserData {
@@ -45,4 +47,10 @@ export type ActionType = 'ROTATE' | 'DROP' | 'MOVE' | 'LOCK' | 'NONE';
 export interface GameAction {
   type: ActionType;
   id: number; // Timestamp to trigger unique effects
+}
+
+export interface PenaltyAnimation {
+  id: number;
+  penalty: number;
+  timestamp: number;
 }

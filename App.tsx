@@ -2,16 +2,53 @@ import React, { useState, useEffect, useRef } from 'react';
 import WelcomeScreen from './components/WelcomeScreen';
 import LoginScreen from './components/LoginScreen';
 import ForgotPasswordScreen from './components/ForgotPasswordScreen';
+import ResetPasswordScreen from './components/ResetPasswordScreen';
 import TitleScreen from './components/TitleScreen';
 import RegistrationForm from './components/RegistrationForm';
 import HUD from './components/HUD';
 import GameBoard from './components/GameBoard';
 import GameOverScreen from './components/GameOverScreen';
+import LevelUpScreen from './components/LevelUpScreen';
+import DebugPanel from './components/DebugPanel';
 import SnowEffect, { SnowEffectHandle } from './components/SnowEffect';
 import LeaderboardModal from './components/LeaderboardModal';
-import { GameState, PlayerStats, TetrominoType, UserData, LeaderboardEntry, GameAction } from './types';
+import { GameState, PlayerStats, TetrominoType, UserData, LeaderboardEntry, GameAction, PenaltyAnimation } from './types';
 import { BOARD_WIDTH, BOARD_HEIGHT, TETROMINOS, TETROMINO_KEYS } from './constants';
-import { supabase, submitScore, getLeaderboard } from './services/supabase';
+import { supabase, submitScore, getLeaderboard, ensurePlayerVerified } from './services/supabase';
+
+// -- Gravity Function: Professional 10-level system --
+const getGravityForLevel = (level: number): number => {
+  // Level 1-10 with exponential but playable scaling
+  // Returns drop interval in milliseconds
+  const baseSpeed = 1000; // Level 1 speed
+  const minSpeed = 150;   // Level 10 speed (still playable)
+
+  // Exponential decay formula for smooth progression
+  const speed = baseSpeed * Math.pow(minSpeed / baseSpeed, (level - 1) / 9);
+  return Math.max(minSpeed, Math.round(speed));
+};
+
+// -- Ghost Penalty Function: Level-based penalties --
+const getGhostPenalty = (level: number): number => {
+  const penalties: { [key: number]: number } = {
+    1: 3,
+    2: 5,
+    3: 0,  // Forbidden
+    4: 0,  // Forbidden
+    5: 0,  // Forbidden
+    6: 0,  // Forbidden
+    7: 10,
+    8: 12,
+    9: 15,
+    10: 20
+  };
+  return penalties[level] || 0;
+};
+
+// -- Check if ghost is allowed for level --
+const isGhostAllowedForLevel = (level: number): boolean => {
+  return level <= 2 || level >= 7;
+};
 
 // -- Helper for shape rotation --
 const rotateMatrix = (matrix: number[][]) => {
@@ -62,6 +99,12 @@ const App: React.FC = () => {
     level: 1,
   });
 
+  // Ghost piece control - default OFF, allowed for levels 1-2 and 7-10
+  const [ghostEnabled, setGhostEnabled] = useState(false);
+
+  // Penalty animations (floating red numbers)
+  const [penaltyAnimations, setPenaltyAnimations] = useState<PenaltyAnimation[]>([]);
+
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [isNewHigh, setIsNewHigh] = useState(false);
 
@@ -79,6 +122,7 @@ const App: React.FC = () => {
   const lastTimeRef = useRef<number>(0);
   const dropCounterRef = useRef<number>(0);
   const dropIntervalRef = useRef<number>(1000);
+  const ghostEnabledRef = useRef(ghostEnabled);
 
   const snowEffectRef = useRef<SnowEffectHandle>(null);
 
@@ -90,6 +134,7 @@ const App: React.FC = () => {
   useEffect(() => { gridRef.current = grid; }, [grid]);
   useEffect(() => { statsRef.current = stats; }, [stats]);
   useEffect(() => { clearingLinesRef.current = clearingLines; }, [clearingLines]);
+  useEffect(() => { ghostEnabledRef.current = ghostEnabled; }, [ghostEnabled]);
 
   // Load Leaderboard and User Session on Mount
   useEffect(() => {
@@ -112,7 +157,11 @@ const App: React.FC = () => {
             email: session.user.email || ''
           };
           setUser(userData);
+          setUser(userData);
           console.log('User already verified on mount:', userData);
+
+          // Ensure DB knows user is verified
+          ensurePlayerVerified(session.user.email || '');
 
           // Redirect to TITLE if verified
           setGameState(GameState.TITLE);
@@ -127,6 +176,11 @@ const App: React.FC = () => {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth event:', event, 'Session:', session);
 
+      if (event === 'PASSWORD_RECOVERY') {
+        setGameState(GameState.RESET_PASSWORD);
+        return;
+      }
+
       // Handle any auth event where user is verified
       if (session?.user && session.user.email_confirmed_at) {
         const { name, city } = session.user.user_metadata;
@@ -137,13 +191,19 @@ const App: React.FC = () => {
         };
         setUser(userData);
 
+        setUser(userData);
+
         console.log('User verified and logged in:', userData);
+
+        // Ensure DB knows user is verified
+        ensurePlayerVerified(session.user.email || '');
 
         // If we're on welcome, login, or registration screen, automatically go to title
         // so user can click "START SPEL" to start
         if (gameStateRef.current === GameState.WELCOME ||
           gameStateRef.current === GameState.LOGIN ||
-          gameStateRef.current === GameState.REGISTRATION) {
+          gameStateRef.current === GameState.REGISTRATION ||
+          gameStateRef.current === GameState.FORGOT_PASSWORD) {
           console.log('Redirecting to TITLE screen');
           setGameState(GameState.TITLE);
         }
@@ -211,6 +271,39 @@ const App: React.FC = () => {
 
     triggerVisualAction('LOCK');
 
+    // === GHOST PENALTY SYSTEM ===
+    // Apply penalty if ghost is enabled
+    if (ghostEnabledRef.current) {
+      const currentLevel = statsRef.current.level;
+      const penalty = getGhostPenalty(currentLevel);
+
+      if (penalty > 0) {
+        // Apply penalty to score
+        const currentStats = statsRef.current;
+        const newScore = Math.max(0, currentStats.score - penalty);
+
+        setStats({
+          ...currentStats,
+          score: newScore
+        });
+
+        // Trigger floating penalty animation
+        const penaltyAnim: PenaltyAnimation = {
+          id: Date.now(),
+          penalty: penalty,
+          timestamp: Date.now()
+        };
+        setPenaltyAnimations(prev => [...prev, penaltyAnim]);
+
+        // Remove animation after 2 seconds
+        setTimeout(() => {
+          setPenaltyAnimations(prev => prev.filter(p => p.id !== penaltyAnim.id));
+        }, 2000);
+
+        console.log(`👻 Ghost Penalty: -${penalty} points (Level ${currentLevel})`);
+      }
+    }
+
     // 1. Identify Full Lines
     const linesToClear: number[] = [];
     for (let y = BOARD_HEIGHT - 1; y >= 0; y--) {
@@ -259,18 +352,37 @@ const App: React.FC = () => {
     const points = linePoints[linesCleared] * levelMultiplier;
 
     const newLines = currentStats.lines + linesCleared;
-    const newLevel = Math.floor(newLines / 10) + 1;
+    const newLevel = Math.min(10, Math.floor(newLines / 10) + 1); // Cap at level 10
 
+    const leveledUp = newLevel > currentStats.level;
+
+    // Update stats (score persists across levels)
     setStats({
       score: currentStats.score + points,
       lines: newLines,
       level: newLevel
     });
 
-    // Speed up
-    dropIntervalRef.current = Math.max(100, 1000 - ((newLevel - 1) * 100));
+    // Update gravity for new level
+    dropIntervalRef.current = getGravityForLevel(newLevel);
 
-    spawnPiece();
+    // Update ghost allowed state based on level (but keep it OFF - user must enable)
+    // Ghost is allowed for levels 1-2 and 7-10, forbidden for 3-6
+    if (!isGhostAllowedForLevel(newLevel)) {
+      setGhostEnabled(false); // Force disable for forbidden levels
+    }
+    // Note: We don't auto-enable ghost for allowed levels - user must choose
+
+    if (leveledUp) {
+      // Level up! Show level-up screen and reset board
+      setGrid(Array.from({ length: BOARD_HEIGHT }, () => Array(BOARD_WIDTH).fill(0)));
+      setActivePiece(null);
+      setGameState(GameState.LEVEL_UP);
+      // Don't spawn piece yet - wait for user to click continue
+    } else {
+      // Normal progression - spawn next piece
+      spawnPiece();
+    }
   };
 
   const getRandomType = () => TETROMINO_KEYS[Math.floor(Math.random() * TETROMINO_KEYS.length)];
@@ -398,6 +510,70 @@ const App: React.FC = () => {
         e.stopPropagation();
       }
 
+      // === DEBUG MODE: Keyboard Shortcuts ===
+      // Only in PLAYING state
+      if (gameStateRef.current === GameState.PLAYING) {
+        const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
+        // Ctrl/Cmd + L: Skip to next level (add 10 lines)
+        if (isCtrlOrCmd && e.key === 'l') {
+          e.preventDefault();
+          const currentStats = statsRef.current;
+          const linesToAdd = 10 - (currentStats.lines % 10); // Lines needed to reach next level
+          const newLines = currentStats.lines + linesToAdd;
+          const newLevel = Math.min(10, Math.floor(newLines / 10) + 1);
+
+          console.log(`🎮 DEBUG: Skipping to Level ${newLevel}`);
+
+          setStats({
+            ...currentStats,
+            lines: newLines,
+            level: newLevel
+          });
+
+          dropIntervalRef.current = getGravityForLevel(newLevel);
+          setGhostEnabled(newLevel <= 2);
+
+          // Show level-up screen
+          setGrid(Array.from({ length: BOARD_HEIGHT }, () => Array(BOARD_WIDTH).fill(0)));
+          setActivePiece(null);
+          setGameState(GameState.LEVEL_UP);
+          return;
+        }
+
+        // Ctrl/Cmd + 1-9,0: Jump to specific level
+        if (isCtrlOrCmd && /^[0-9]$/.test(e.key)) {
+          e.preventDefault();
+          const targetLevel = e.key === '0' ? 10 : parseInt(e.key);
+          const linesNeeded = (targetLevel - 1) * 10;
+
+          console.log(`🎮 DEBUG: Jumping to Level ${targetLevel}`);
+
+          setStats({
+            ...statsRef.current,
+            lines: linesNeeded,
+            level: targetLevel
+          });
+
+          dropIntervalRef.current = getGravityForLevel(targetLevel);
+          setGhostEnabled(targetLevel <= 2);
+
+          // Show level-up screen
+          setGrid(Array.from({ length: BOARD_HEIGHT }, () => Array(BOARD_WIDTH).fill(0)));
+          setActivePiece(null);
+          setGameState(GameState.LEVEL_UP);
+          return;
+        }
+
+        // Ctrl/Cmd + G: Toggle ghost (for testing)
+        if (isCtrlOrCmd && e.key === 'g') {
+          e.preventDefault();
+          setGhostEnabled(!ghostEnabled);
+          console.log(`🎮 DEBUG: Ghost ${!ghostEnabled ? 'enabled' : 'disabled'}`);
+          return;
+        }
+      }
+
       if (gameStateRef.current !== GameState.PLAYING || isPausedRef.current) return;
 
       if (e.key === 'ArrowLeft') movePiece({ x: -1, y: 0 });
@@ -407,6 +583,17 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown, { passive: false });
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [ghostEnabled]); // Add ghostEnabled to dependencies
+
+  // Automatic Snow Clearing (Every 110 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (snowEffectRef.current) {
+        snowEffectRef.current.triggerPlow();
+      }
+    }, 110000); // 110 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   // --- Flow ---
@@ -428,6 +615,12 @@ const App: React.FC = () => {
     }
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setGameState(GameState.WELCOME);
+  };
+
   const handleRegistration = (data: UserData) => {
     // RegistrationForm handles the Supabase signup. 
     // After success, it shows "Check Email". 
@@ -443,7 +636,8 @@ const App: React.FC = () => {
     setStats({ score: 0, lines: 0, level: 1 });
     statsRef.current = { score: 0, lines: 0, level: 1 };
 
-    dropIntervalRef.current = 1000;
+    dropIntervalRef.current = getGravityForLevel(1); // Use gravity function
+    setGhostEnabled(false); // Ghost starts OFF - user must enable manually
     setGameState(GameState.PLAYING);
     setIsPaused(false);
     setShowLeaderboard(false);
@@ -485,6 +679,12 @@ const App: React.FC = () => {
     setGameState(GameState.TITLE);
     setIsPaused(false);
     setShowLeaderboard(false);
+  };
+
+  const handleLevelUpContinue = () => {
+    // Resume game after level-up, spawn new piece
+    setGameState(GameState.PLAYING);
+    spawnPiece();
   };
 
   return (
@@ -542,11 +742,17 @@ const App: React.FC = () => {
         />
       )}
 
+      {gameState === GameState.RESET_PASSWORD && (
+        <ResetPasswordScreen
+          onSuccess={() => setGameState(GameState.TITLE)}
+        />
+      )}
+
       {gameState === GameState.TITLE && (
         <TitleScreen
           onStart={handleStartClick}
           leaderboard={leaderboard}
-          onClearSnow={() => snowEffectRef.current?.triggerPlow()}
+          onLogout={handleLogout}
           user={user}
         />
       )}
@@ -556,6 +762,13 @@ const App: React.FC = () => {
           onSubmit={handleRegistration}
           onBack={() => setGameState(GameState.WELCOME)}
           onGoToLogin={() => setGameState(GameState.LOGIN)}
+        />
+      )}
+
+      {gameState === GameState.LEVEL_UP && (
+        <LevelUpScreen
+          level={stats.level}
+          onContinue={handleLevelUpContinue}
         />
       )}
 
@@ -587,11 +800,23 @@ const App: React.FC = () => {
                 activePiece={activePiece}
                 lastAction={lastAction}
                 clearingLines={clearingLines}
+                ghostEnabled={ghostEnabled}
+                penaltyAnimations={penaltyAnimations}
               />
             </div>
 
             <div className="flex-none w-full md:w-auto h-auto md:h-full flex items-center justify-center md:items-start order-2 md:order-1">
-              <HUD stats={stats} nextPiece={nextPiece} />
+              <HUD
+                stats={stats}
+                nextPiece={nextPiece}
+                ghostEnabled={ghostEnabled}
+                onToggleGhost={() => {
+                  // Only allow toggle if ghost is allowed for current level
+                  if (isGhostAllowedForLevel(stats.level)) {
+                    setGhostEnabled(!ghostEnabled);
+                  }
+                }}
+              />
             </div>
           </div>
         </div>
@@ -605,6 +830,11 @@ const App: React.FC = () => {
           isNewHigh={isNewHigh}
           leaderboard={leaderboard}
         />
+      )}
+
+      {/* Debug Panel - Only visible during gameplay */}
+      {gameState === GameState.PLAYING && (
+        <DebugPanel currentLevel={stats.level} />
       )}
 
     </div>

@@ -50,12 +50,37 @@ export const getLeaderboard = async () => {
         .select('name, city, highscore')
         .eq('is_verified', true) // Only show verified players
         .order('highscore', { ascending: false })
-        .limit(10);
+        .limit(50); // Fetch more to handle duplicates
 
     if (error) {
         console.error('Error fetching leaderboard:', error);
         return [];
     }
 
-    return data;
+    if (!data) return [];
+
+    // Filter unique names (keep highest score per name)
+    const seenNames = new Set();
+    const uniqueLeaderboard = [];
+
+    for (const entry of data) {
+        if (!seenNames.has(entry.name)) {
+            seenNames.add(entry.name);
+            uniqueLeaderboard.push(entry);
+        }
+        if (uniqueLeaderboard.length >= 10) break;
+    }
+
+    return uniqueLeaderboard;
+};
+
+export const ensurePlayerVerified = async (email: string) => {
+    const { error } = await supabase
+        .from('players')
+        .update({ is_verified: true })
+        .eq('email', email);
+
+    if (error) {
+        console.error('Error updating player verification:', error);
+    }
 };
