@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Omroep Parkstad - Kerst Tetris</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              arcade: {
+                dark: '#0a0a14',
+                grid: '#1a1a2e',
+                neon: '#00f3ff',
+                purple: '#bc13fe',
+              }
+            },
+            fontFamily: {
+              sans: ['Inter', 'Segoe UI', 'Roboto', 'sans-serif'],
+              mono: ['JetBrains Mono', 'SF Mono', 'Consolas', 'monospace'],
+              display: ['Montserrat', 'Arial Black', 'sans-serif'],
+            },
+            animation: {
+              'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'float': 'float 6s ease-in-out infinite',
+              'sleigh': 'sleigh-run 25s linear infinite',
+              'snow-pile': 'snowPile 10s ease-in-out infinite alternate',
+              'lights': 'lights 2s infinite',
+              'spin-slow': 'spin 4s linear infinite',
+            },
+            keyframes: {
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-20px)' },
+              },
+              snow: {
+                '0%': { transform: 'translateY(-10px)' },
+                '100%': { transform: 'translateY(100vh)' }
+              },
+              'sleigh-run': {
+                '0%': { left: '-20%', transform: 'scaleX(1)' },
+                '45%': { left: '110%', transform: 'scaleX(1)' },
+                '50%': { left: '110%', transform: 'scaleX(-1)' },
+                '95%': { left: '-20%', transform: 'scaleX(-1)' },
+                '100%': { left: '-20%', transform: 'scaleX(1)' },
+              },
+              snowPile: {
+                '0%': { height: '8px', transform: 'scaleY(1)' },
+                '100%': { height: '14px', transform: 'scaleY(1.1)' }
+              },
+              lights: {
+                '0%, 100%': { opacity: '1', filter: 'brightness(1.2)' },
+                '50%': { opacity: '0.6', filter: 'brightness(0.8)' }
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      html, body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: #050510;
+        color: white;
+        -webkit-font-smoothing: antialiased;
+        font-family: 'Inter', sans-serif;
+        touch-action: none; /* Disable native touch gestures like scroll/zoom */
+        overscroll-behavior: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      
+      /* Winter Night Background */
+      .winter-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100dvh;
+        background: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #020617 80%);
+        z-index: -2;
+      }
+
+      /* Snow Overlay */
+      .snow-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: -1;
+      }
+
+      /* Glassmorphism utility */
+      .glass-panel {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+      }
+
+      /* Scrollbar hide */
+      .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+      }
+      .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+
+      /* --- LAYOUT RULES --- */
+      #game-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 2vw;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        position: relative;
+      }
+
+      #playfield-container {
+        position: relative;
+        /* Height logic: min(90vh, 85vw width constraint) */
+        /* Aspect ratio 10/20 = 0.5 */
+        height: 90vh;
+        aspect-ratio: 10/20;
+        max-width: 85vw; /* Fallback constraint */
+        
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+        flex-shrink: 0;
+      }
+
+      #sidebar {
+        flex: 0 0 15vw;
+        max-width: 20vw;
+        min-width: 140px;
+        display: flex;
+        flex-direction: column;
+        gap: 2vh;
+        z-index: 10;
+        justify-content: center;
+      }
+
+      /* Mobile Mode */
+      @media (max-width: 700px) {
+        #game-wrapper {
+          flex-direction: row; /* Strict Side-by-Side */
+          align-items: center;
+          justify-content: center;
+          height: 100dvh; /* Use dynamic viewport height */
+          gap: 3vw;
+          padding: 1vh 3vw;
+        }
+
+        #playfield-container {
+          /* Primary constraint on mobile is Width to allow sidebar space */
+          width: 62vw; 
+          height: auto; 
+          aspect-ratio: 10/20;
+          flex: 0 0 auto;
+          max-height: 95dvh;
+          margin-bottom: 0;
+        }
+
+        #sidebar {
+          flex: 1; /* Take remaining horizontal space */
+          max-width: 32vw;
+          height: auto;
+          
+          /* Align HUD boxes to match playfield height */
+          aspect-ratio: 10/20; 
+          max-height: 95dvh;
+          
+          flex-direction: column;
+          gap: 2vw;
+          justify-content: space-between;
+          padding-bottom: 0;
+        }
+      }
+
+      /* Touch Zones - Transparent Overlays */
+      .touch-zone {
+        position: absolute;
+        z-index: 50;
+        /* background: rgba(255,0,0,0.1); Debugging */
+      }
+    </style>
+    <script type="importmap">
+    {
+      "imports": {
+        "react/": "https://aistudiocdn.com/react@^19.2.0/",
+        "react": "https://aistudiocdn.com/react@^19.2.0",
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+      }
+    }
+    </script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <div class="winter-bg"></div>
+    <div id="snow-container" class="snow-container"></div>
+    <script type="module" src="./index.tsx"></script>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
