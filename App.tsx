@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import WelcomeScreen from './components/WelcomeScreen';
 import LoginScreen from './components/LoginScreen';
+import ForgotPasswordScreen from './components/ForgotPasswordScreen';
 import TitleScreen from './components/TitleScreen';
 import RegistrationForm from './components/RegistrationForm';
 import HUD from './components/HUD';
@@ -99,15 +100,24 @@ const App: React.FC = () => {
 
       // 2. Check Session
       const { data: { session } } = await supabase.auth.getSession();
+      console.log('Initial session check:', session);
+
       if (session?.user) {
         // Check if verified
         if (session.user.email_confirmed_at) {
           const { name, city } = session.user.user_metadata;
-          setUser({
+          const userData = {
             name: name || 'Speler',
             city: city || 'Onbekend',
             email: session.user.email || ''
-          });
+          };
+          setUser(userData);
+          console.log('User already verified on mount:', userData);
+
+          // Redirect to TITLE if verified
+          setGameState(GameState.TITLE);
+        } else {
+          console.log('User session found but email not confirmed');
         }
       }
     };
@@ -115,7 +125,10 @@ const App: React.FC = () => {
 
     // Listen for auth changes (e.g. if they click the email link while app is open)
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user && session.user.email_confirmed_at) {
+      console.log('Auth event:', event, 'Session:', session);
+
+      // Handle any auth event where user is verified
+      if (session?.user && session.user.email_confirmed_at) {
         const { name, city } = session.user.user_metadata;
         const userData = {
           name: name || 'Speler',
@@ -124,13 +137,18 @@ const App: React.FC = () => {
         };
         setUser(userData);
 
+        console.log('User verified and logged in:', userData);
+
         // If we're on welcome, login, or registration screen, automatically go to title
         // so user can click "START SPEL" to start
         if (gameStateRef.current === GameState.WELCOME ||
           gameStateRef.current === GameState.LOGIN ||
           gameStateRef.current === GameState.REGISTRATION) {
+          console.log('Redirecting to TITLE screen');
           setGameState(GameState.TITLE);
         }
+      } else if (session?.user && !session.user.email_confirmed_at) {
+        console.log('User signed in but email not confirmed yet');
       }
     });
 
@@ -514,10 +532,13 @@ const App: React.FC = () => {
         <LoginScreen
           onBack={() => setGameState(GameState.WELCOME)}
           onLoginSuccess={() => setGameState(GameState.TITLE)}
-          onForgotPassword={() => {
-            // TODO: Implement password reset
-            alert('Wachtwoord reset functionaliteit komt binnenkort!');
-          }}
+          onForgotPassword={() => setGameState(GameState.FORGOT_PASSWORD)}
+        />
+      )}
+
+      {gameState === GameState.FORGOT_PASSWORD && (
+        <ForgotPasswordScreen
+          onBack={() => setGameState(GameState.LOGIN)}
         />
       )}
 
