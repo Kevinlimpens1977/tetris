@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { BOARD_WIDTH, BOARD_HEIGHT, TETROMINOS, COLORS } from '../constants';
 import { TetrominoType, GameAction, PenaltyAnimation } from '../types';
+import { getPlayfieldBackground } from '../utils/getPlayfieldBackground';
 
 interface GameBoardProps {
     grid: (string | number)[][];
@@ -13,6 +14,7 @@ interface GameBoardProps {
     clearingLines?: number[]; // Optional prop for animation
     ghostEnabled?: boolean; // Ghost piece toggle (levels 1-2 and 7-10)
     penaltyAnimations?: PenaltyAnimation[]; // Floating penalty numbers
+    level: number;
 }
 
 // Removed static BLOCK_SIZE
@@ -36,13 +38,24 @@ interface FloatingText {
     opacity: number;
 }
 
+// Internal Mist Particle
+interface MistParticle {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    size: number;
+    opacity: number;
+}
+
 const GameBoard: React.FC<GameBoardProps> = ({
     grid,
     activePiece,
     lastAction,
     clearingLines = [],
     ghostEnabled = true,
-    penaltyAnimations = []
+    penaltyAnimations = [],
+    level
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -83,7 +96,35 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
     // Particle System Ref
     const particlesRef = useRef<Particle[]>([]);
+    const mistParticlesRef = useRef<MistParticle[]>([]);
+    const snowAccumulationRef = useRef<number>(0); // Height in pixels
+    const breathingPhaseRef = useRef<number>(0);
     const prevClearingLinesRef = useRef<number[]>([]);
+    const prevLevelRef = useRef<number>(level);
+
+    // Initialize Mist Particles
+    useEffect(() => {
+        const mist: MistParticle[] = [];
+        for (let i = 0; i < 40; i++) {
+            mist.push({
+                x: Math.random() * BOARD_WIDTH * 30, // Approx width, will be scaled in render
+                y: Math.random() * BOARD_HEIGHT * 30,
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: (Math.random() - 0.5) * 0.5,
+                size: Math.random() * 20 + 10,
+                opacity: Math.random() * 0.07 + 0.05
+            });
+        }
+        mistParticlesRef.current = mist;
+    }, []);
+
+    // Reset snow on level up
+    useEffect(() => {
+        if (level !== prevLevelRef.current) {
+            snowAccumulationRef.current = 0;
+            prevLevelRef.current = level;
+        }
+    }, [level]);
 
     // State to control the phases of the Tetris animation (Flash -> Explode)
     const isTetrisFlashRef = useRef<boolean>(false);
@@ -162,8 +203,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
         if (isMega) {
             physicsRef.current.shakeIntensity = 20; // Massive shake
-            floatingTextRef.current = { text: "TETRIS!", y: BOARD_HEIGHT * blockSize / 2, opacity: 1 };
+            // TETRIS! text is now handled by overlay, but we keep this for particle logic if needed
         }
+
+        // Increase snow accumulation slightly on clear
+        snowAccumulationRef.current = Math.min(10, snowAccumulationRef.current + rows.length * 0.5);
 
         // For each block in the clearing rows, spawn particles
         rows.forEach(y => {
@@ -322,9 +366,71 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
         // Reset transform/clear
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // --- Shake Effect ---
+        // --- 1. Background & Breathing ---
+        breathingPhaseRef.current += 0.002; // Slow breath
+        const breath = Math.sin(breathingPhaseRef.current * Math.PI * 2) * 0.07; // 7% amplitude
+
+        const baseBg = getPlayfieldBackground(level);
+        // Parse rgba to adjust alpha/lightness if needed, or just overlay black with varying opacity
+        // Simpler: Draw base, then overlay breathing
+
+        ctx.fillStyle = baseBg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Breathing Overlay
+        ctx.fillStyle = `rgba(0, 0, 0, ${0.1 + breath})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // --- 2. Spotlights (Light Beams) ---
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        // Beam intensity based on level
+        let beamOpacity = 0.05;
+        if (level >= 4) beamOpacity = 0.1;
+        if (level >= 7) beamOpacity = 0.15;
+        if (level === 10) beamOpacity = 0.25;
+
+        const beamGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        beamGrad.addColorStop(0, `rgba(255, 255, 255, 0)`);
+        beamGrad.addColorStop(0.5, `rgba(255, 255, 255, ${beamOpacity})`);
+        beamGrad.addColorStop(1, `rgba(255, 255, 255, 0)`);
+
+        ctx.fillStyle = beamGrad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Second beam for higher levels
+        if (level >= 7) {
+            const beamGrad2 = ctx.createLinearGradient(canvas.width, 0, 0, canvas.height);
+            beamGrad2.addColorStop(0, `rgba(255, 255, 255, 0)`);
+            beamGrad2.addColorStop(0.5, `rgba(255, 255, 255, ${beamOpacity * 0.7})`);
+            beamGrad2.addColorStop(1, `rgba(255, 255, 255, 0)`);
+            ctx.fillStyle = beamGrad2;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        ctx.restore();
+
+        // --- 3. Mist Particles ---
+        ctx.save();
+        mistParticlesRef.current.forEach(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+
+            // Wrap
+            if (p.x < 0) p.x = canvas.width;
+            if (p.x > canvas.width) p.x = 0;
+            if (p.y < 0) p.y = canvas.height;
+            if (p.y > canvas.height) p.y = 0;
+
+            ctx.fillStyle = `rgba(255, 255, 255, ${p.opacity})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.restore();
+
+        // --- Shake Effect (Applied after background) ---
         if (physicsRef.current.shakeIntensity > 0) {
             const dx = (Math.random() - 0.5) * physicsRef.current.shakeIntensity;
             const dy = (Math.random() - 0.5) * physicsRef.current.shakeIntensity;
@@ -337,8 +443,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
         const activePulse = 15 + Math.sin(now * 0.008) * 8;
         const megaPulse = Math.sin(now * 0.05); // Faster pulse for mega clear
 
-        // Draw Grid Background
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        // Draw Grid Background (Subtle)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
         ctx.lineWidth = 1;
         for (let x = 0; x <= BOARD_WIDTH; x++) {
             ctx.beginPath();
@@ -352,6 +458,12 @@ const GameBoard: React.FC<GameBoardProps> = ({
             ctx.lineTo(BOARD_WIDTH * blockSize, y * blockSize);
             ctx.stroke();
         }
+
+        // --- Auto-Contrast Filter ---
+        // Simple logic: if level is dark (most are), boost brightness slightly
+        // We can just use a fixed boost for now as all backgrounds are relatively dark
+        const brightness = 1.1;
+        ctx.filter = `brightness(${brightness})`;
 
         // Draw Static Blocks on Grid
         grid.forEach((row, y) => {
@@ -381,6 +493,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
                 }
             });
         });
+
+        ctx.filter = 'none'; // Reset filter
 
         // Draw Particles (Explosion)
         if (particlesRef.current.length > 0) {
@@ -414,49 +528,38 @@ const GameBoard: React.FC<GameBoardProps> = ({
             }
         }
 
-        // Draw Floating Text (TETRIS!)
-        if (floatingTextRef.current) {
-            const ft = floatingTextRef.current;
-            ft.y -= 1; // Float up
-            ft.opacity -= 0.01;
+        // --- Snow Accumulation at Bottom ---
+        if (snowAccumulationRef.current > 0) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.shadowColor = 'white';
+            ctx.shadowBlur = 10;
 
-            if (ft.opacity <= 0) {
-                floatingTextRef.current = null;
-            } else {
-                ctx.save();
-                ctx.globalAlpha = ft.opacity;
-                ctx.translate(canvas.width / 2, ft.y);
+            // Draw a wavy snow pile at the bottom
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height);
 
-                // Text Scale Pulse
-                const scale = 1 + Math.sin(now * 0.02) * 0.1;
-                ctx.scale(scale, scale);
+            const points = 10;
+            const step = canvas.width / points;
 
-                // Text Styles
-                ctx.font = "900 60px Montserrat";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-
-                // Stroke
-                ctx.lineWidth = 6;
-                ctx.strokeStyle = '#b91c1c'; // Dark Red
-                ctx.strokeText(ft.text, 0, 0);
-
-                // Fill (Gradient)
-                const gradient = ctx.createLinearGradient(0, -30, 0, 30);
-                gradient.addColorStop(0, "#fef08a"); // Yellow
-                gradient.addColorStop(0.5, "#facc15"); // Gold
-                gradient.addColorStop(1, "#ef4444"); // Red
-                ctx.fillStyle = gradient;
-                ctx.fillText(ft.text, 0, 0);
-
-                // Shine
-                ctx.shadowColor = 'white';
-                ctx.shadowBlur = 20;
-                ctx.fillStyle = "rgba(255,255,255,0.8)";
-                ctx.fillText(ft.text, 0, 0);
-
-                ctx.restore();
+            for (let i = 0; i <= points; i++) {
+                const x = i * step;
+                // Wave based on time and index
+                const wave = Math.sin(now * 0.002 + i) * 2;
+                const h = snowAccumulationRef.current + wave;
+                ctx.lineTo(x, canvas.height - h);
             }
+
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Floating Text is now handled by DOM overlay
+        if (floatingTextRef.current) {
+            // Logic moved to DOM
+            floatingTextRef.current = null;
         }
 
         // Draw Active Piece + Ghost
@@ -508,6 +611,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
                 isTetrisFlashRef.current = true;
                 physicsRef.current.shakeIntensity = 5; // Start rumble
 
+                // Trigger DOM Tetris Animation
+                setShowTetrisAnim(true);
+                setTimeout(() => setShowTetrisAnim(false), 1500);
+
                 // Phase 2: Explode after delay (matching the App.tsx delay logic mostly)
                 // App delay is 1000ms. We'll explode at 500ms so particles fly while lines technically still exist in grid data.
                 setTimeout(() => {
@@ -539,7 +646,19 @@ const GameBoard: React.FC<GameBoardProps> = ({
         return () => {
             if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
         };
-    }, [grid, activePiece, lastAction, clearingLines]);
+    }, [grid, activePiece, lastAction, clearingLines, level]);
+
+    const [showTetrisAnim, setShowTetrisAnim] = useState(false);
+
+    // Christmas Lights Border Logic
+    const getLightPulseClass = (lvl: number) => {
+        if (lvl <= 3) return 'animate-pulse-slow';
+        if (lvl <= 7) return 'animate-pulse';
+        if (lvl <= 9) return 'animate-pulse-fast';
+        return 'animate-sparkle'; // Custom class needed or just fast pulse
+    };
+
+    const lightPulseClass = getLightPulseClass(level);
 
     return (
         <div
@@ -547,19 +666,57 @@ const GameBoard: React.FC<GameBoardProps> = ({
             className="
       relative h-full w-full max-w-[90vw] md:max-w-none aspect-[10/20] 
       flex items-center justify-center 
-      rounded-xl overflow-hidden 
-      p-[2.5px]
-      shadow-[0_0_30px_rgba(239,68,68,0.4)]
+      rounded-xl 
+      p-0
+      shadow-[0_0_30px_rgba(0,0,0,0.5)]
     ">
-            {/* Animated Border - Reduced Opacity */}
-            <div className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,#b91c1c_0%,#ef4444_20%,#ffffff_25%,#ef4444_30%,#b91c1c_50%,#ef4444_70%,#ffffff_75%,#ef4444_80%,#b91c1c_100%)] animate-spin-slow opacity-50"></div>
+            {/* Christmas Lights Border */}
+            <div className="absolute inset-[-6px] pointer-events-none z-20 rounded-xl overflow-hidden">
+                {/* Top Lights */}
+                <div className="absolute top-0 left-0 w-full h-2 flex justify-between px-1">
+                    {[...Array(15)].map((_, i) => (
+                        <div key={`t-${i}`} className={`w-1.5 h-1.5 rounded-full ${i % 3 === 0 ? 'bg-red-500 shadow-[0_0_5px_red]' : i % 3 === 1 ? 'bg-green-500 shadow-[0_0_5px_lime]' : 'bg-yellow-400 shadow-[0_0_5px_gold]'} ${lightPulseClass}`} style={{ animationDelay: `${i * 0.1}s` }}></div>
+                    ))}
+                </div>
+                {/* Bottom Lights */}
+                <div className="absolute bottom-0 left-0 w-full h-2 flex justify-between px-1">
+                    {[...Array(15)].map((_, i) => (
+                        <div key={`b-${i}`} className={`w-1.5 h-1.5 rounded-full ${i % 3 === 0 ? 'bg-red-500 shadow-[0_0_5px_red]' : i % 3 === 1 ? 'bg-green-500 shadow-[0_0_5px_lime]' : 'bg-yellow-400 shadow-[0_0_5px_gold]'} ${lightPulseClass}`} style={{ animationDelay: `${i * 0.1}s` }}></div>
+                    ))}
+                </div>
+                {/* Left Lights */}
+                <div className="absolute top-0 left-0 h-full w-2 flex flex-col justify-between py-1">
+                    {[...Array(25)].map((_, i) => (
+                        <div key={`l-${i}`} className={`w-1.5 h-1.5 rounded-full ${i % 3 === 0 ? 'bg-red-500 shadow-[0_0_5px_red]' : i % 3 === 1 ? 'bg-green-500 shadow-[0_0_5px_lime]' : 'bg-yellow-400 shadow-[0_0_5px_gold]'} ${lightPulseClass}`} style={{ animationDelay: `${i * 0.1}s` }}></div>
+                    ))}
+                </div>
+                {/* Right Lights */}
+                <div className="absolute top-0 right-0 h-full w-2 flex flex-col justify-between py-1">
+                    {[...Array(25)].map((_, i) => (
+                        <div key={`r-${i}`} className={`w-1.5 h-1.5 rounded-full ${i % 3 === 0 ? 'bg-red-500 shadow-[0_0_5px_red]' : i % 3 === 1 ? 'bg-green-500 shadow-[0_0_5px_lime]' : 'bg-yellow-400 shadow-[0_0_5px_gold]'} ${lightPulseClass}`} style={{ animationDelay: `${i * 0.1}s` }}></div>
+                    ))}
+                </div>
+            </div>
 
             {/* Inner Content */}
-            <div className="relative w-full h-full bg-black/60 backdrop-blur-xl rounded-[calc(0.75rem-2.5px)] overflow-hidden">
-                {/* Frost Overlay */}
-                <div className="absolute inset-0 pointer-events-none z-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10"></div>
+            <div className="relative w-full h-full overflow-hidden rounded-lg">
                 {/* Canvas scales to fit container */}
                 <canvas ref={canvasRef} className="block w-full h-full object-contain relative z-0" />
+
+                {/* TETRIS! Win Animation Overlay */}
+                {showTetrisAnim && (
+                    <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none animate-bounce-in-out">
+                        <div className="relative">
+                            <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 via-yellow-500 to-red-600 drop-shadow-[0_0_20px_rgba(255,215,0,0.8)]"
+                                style={{ WebkitTextStroke: '2px white' }}>
+                                TETRIS!
+                            </h1>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="w-full h-full animate-ping bg-yellow-400/30 rounded-full blur-xl"></div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Floating Penalty Animations */}
                 {penaltyAnimations.map((anim) => {

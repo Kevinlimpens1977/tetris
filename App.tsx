@@ -877,6 +877,7 @@ const App: React.FC = () => {
                 clearingLines={clearingLines}
                 ghostEnabled={ghostEnabled}
                 penaltyAnimations={penaltyAnimations}
+                level={stats.level}
               />
             </div>
 
