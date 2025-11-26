@@ -752,11 +752,11 @@ const App: React.FC = () => {
       {/* Background Ambience */}
       <SnowEffect ref={snowEffectRef} />
 
-      {/* Exit Button (Only in Gameplay) */}
+      {/* Close Button - Always top-right, above everything */}
       {gameState === GameState.PLAYING && (
         <button
           onClick={handleExitClick}
-          className="absolute top-3 right-3 z-50 group hover:scale-110 transition-transform"
+          className="fixed top-3 right-3 z-[9999] group hover:scale-110 transition-transform"
           title="Verlaten / Pauze"
         >
           <div className="relative w-12 h-12 md:w-16 md:h-16">
@@ -834,46 +834,52 @@ const App: React.FC = () => {
       {(gameState === GameState.PLAYING || gameState === GameState.GAME_OVER) && (
         <div className="flex flex-col w-full h-full max-w-7xl mx-auto p-1 md:p-4 overflow-hidden animate-fade-in-up">
 
-          {/* Header - Styled like HUD panels */}
-          <div className="flex-none relative group overflow-hidden rounded-xl md:rounded-2xl p-[1px] md:p-[2px] mb-2 max-w-lg mx-auto w-full shadow-[0_0_15px_rgba(239,68,68,0.15)] transition-all duration-300">
-            {/* Animated Border */}
-            <div className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,#b91c1c_0%,#ef4444_20%,#ffffff_25%,#ef4444_30%,#b91c1c_50%,#ef4444_70%,#ffffff_75%,#ef4444_80%,#b91c1c_100%)] animate-spin-slow opacity-50"></div>
-
-            {/* Content */}
-            <div className="relative w-full h-full bg-black/60 backdrop-blur-xl rounded-[calc(0.75rem-1px)] md:rounded-[calc(1rem-2px)] p-3 md:p-4">
-              <div className="flex justify-between items-center">
-                <div className="flex flex-col gap-1">
-                  <div className="text-[10px] md:text-xs uppercase tracking-widest text-gray-400">
-                    Speler: <span className="text-white font-bold">{user?.name}</span>
-                  </div>
-                  <div className="text-[10px] md:text-xs uppercase tracking-widest text-gray-400">
-                    Top Score: <span className="text-yellow-400 font-bold">{leaderboard[0]?.highscore?.toLocaleString() || 0}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div
-            className="flex-1 min-h-0 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-8 w-full touch-none"
+          {/* Main Game Container */}
+          <div className="flex-1 min-h-0 flex flex-col md:flex-row items-start justify-center gap-2 md:gap-8 w-full touch-none"
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
 
-            <div className="flex-1 h-full w-full flex items-center justify-center min-h-0 relative order-2 md:order-1">
-              <GameBoard
-                grid={grid}
-                activePiece={activePiece}
-                lastAction={lastAction}
-                clearingLines={clearingLines}
-                ghostEnabled={ghostEnabled}
-                penaltyAnimations={penaltyAnimations}
-                level={stats.level}
-              />
+            {/* Left/Center: GameBoard + Header */}
+            <div className="flex-1 h-full w-full flex flex-col items-center justify-center min-h-0 relative order-2 md:order-1 gap-2">
+
+              {/* Header - Same width as GameBoard */}
+              <div className="flex-none relative group overflow-hidden rounded-xl md:rounded-2xl p-[1px] md:p-[2px] w-full max-w-[90vw] md:max-w-none aspect-[10/1] shadow-[0_0_15px_rgba(239,68,68,0.15)] transition-all duration-300">
+                {/* Animated Border */}
+                <div className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,#b91c1c_0%,#ef4444_20%,#ffffff_25%,#ef4444_30%,#b91c1c_50%,#ef4444_70%,#ffffff_75%,#ef4444_80%,#b91c1c_100%)] animate-spin-slow opacity-50"></div>
+
+                {/* Content */}
+                <div className="relative w-full h-full bg-black/60 backdrop-blur-xl rounded-[calc(0.75rem-1px)] md:rounded-[calc(1rem-2px)] p-2 md:p-3 flex items-center">
+                  <div className="flex justify-between items-center w-full">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="text-[10px] md:text-xs uppercase tracking-widest text-gray-400">
+                        Speler: <span className="text-white font-bold">{user?.name}</span>
+                      </div>
+                      <div className="text-[10px] md:text-xs uppercase tracking-widest text-gray-400">
+                        Top Score: <span className="text-yellow-400 font-bold">{leaderboard[0]?.highscore?.toLocaleString() || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* GameBoard */}
+              <div className="flex-1 w-full flex items-center justify-center min-h-0">
+                <GameBoard
+                  grid={grid}
+                  activePiece={activePiece}
+                  lastAction={lastAction}
+                  clearingLines={clearingLines}
+                  ghostEnabled={ghostEnabled}
+                  penaltyAnimations={penaltyAnimations}
+                  level={stats.level}
+                />
+              </div>
             </div>
 
-            <div className="flex-none w-full md:w-auto h-auto md:h-full flex items-center justify-center md:items-start order-1 md:order-2">
+            {/* Right: HUD with top margin to avoid close button */}
+            <div className="flex-none w-full md:w-auto h-auto md:h-full flex items-center justify-center md:items-start order-1 md:order-2 mt-0 md:mt-20">
               <HUD
                 stats={stats}
                 nextPiece={nextPiece}
