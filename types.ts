@@ -40,6 +40,7 @@ export interface PlayerStats {
   score: number;
   lines: number;
   level: number;
+  lotteryTickets: number;
 }
 
 export type ActionType = 'ROTATE' | 'DROP' | 'MOVE' | 'LOCK' | 'NONE';
@@ -47,6 +48,12 @@ export type ActionType = 'ROTATE' | 'DROP' | 'MOVE' | 'LOCK' | 'NONE';
 export interface GameAction {
   type: ActionType;
   id: number; // Timestamp to trigger unique effects
+  payload?: {
+    x?: number;
+    y?: number;
+    tetromino?: TetrominoType;
+    rotation?: number;
+  };
 }
 
 export interface PenaltyAnimation {

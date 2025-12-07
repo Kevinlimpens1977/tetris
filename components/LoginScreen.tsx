@@ -78,7 +78,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLoginSuccess, onFor
         <div className="relative z-20 flex flex-col items-center justify-center w-full h-full animate-fade-in p-6">
             <div className="glass-panel p-8 rounded-3xl max-w-md w-full shadow-2xl border border-white/20 relative">
                 {/* Festive Decor */}
-                <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-5xl">🎅</div>
+                <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-5xl">🐉</div>
 
                 <h2 className="text-2xl font-bold text-center mb-6 mt-4 text-transparent bg-clip-text bg-gradient-to-r from-white to-cyan-300">
                     Inloggen

@@ -26,34 +26,58 @@ export interface Player {
     name: string;
     city: string;
     highscore: number;
+    lottery_tickets: number; // New field
     last_played: string;
     is_verified: boolean;
 }
 
-export const submitScore = async (score: number) => {
+export const submitScore = async (score: number, tickets: number) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user || !user.email) return;
 
-    const { error } = await supabase.rpc('update_highscore', {
+    // Get metadata safely
+    const { name, city } = user.user_metadata;
+
+    // 1. Update Highscore & Tickets (Global China Leaderboard)
+    // We try to call the new RPC, or fallback to direct upset if we can (but RPC is safer for atomic)
+    // For now we assume the SQL migration "china_tables.sql" has been run.
+    const { error: hsError } = await supabase.rpc('update_china_highscore', {
         p_email: user.email,
-        p_score: score
+        p_name: name || 'Speler',
+        p_city: city || 'Onbekend',
+        p_score: score,
+        p_tickets: tickets
     });
 
-    if (error) {
-        console.error('Error submitting score:', error);
+    if (hsError) {
+        console.error('Error updating china highscore:', hsError);
+    }
+
+    // 2. Record specific game play
+    const { error: playError } = await supabase
+        .from('china_game_plays') // NEW TABLE
+        .insert({
+            user_id: user.id,
+            email: user.email,
+            score: score,
+            tickets_earned: tickets,
+            played_at: new Date().toISOString()
+        });
+
+    if (playError) {
+        console.warn('Could not save china game play stats:', playError);
     }
 };
 
 export const getLeaderboard = async () => {
     const { data, error } = await supabase
-        .from('players')
-        .select('name, city, highscore')
-        .eq('is_verified', true) // Only show verified players
+        .from('china_players') // NEW TABLE
+        .select('name, city, highscore, lottery_tickets')
         .order('highscore', { ascending: false })
-        .limit(50); // Fetch more to handle duplicates
+        .limit(50);
 
     if (error) {
-        console.error('Error fetching leaderboard:', error);
+        console.error('Error fetching china leaderboard:', error);
         return [];
     }
 
@@ -74,13 +98,14 @@ export const getLeaderboard = async () => {
     return uniqueLeaderboard;
 };
 
+// Kept for backward compat or if needed, but not primarily used for china tables
 export const ensurePlayerVerified = async (email: string) => {
+    // In the new system, we trust the auth verification for now
+    // But we can still update the old table if needed, or update china_players
+    /*
     const { error } = await supabase
-        .from('players')
+        .from('china_players')
         .update({ is_verified: true })
         .eq('email', email);
-
-    if (error) {
-        console.error('Error updating player verification:', error);
-    }
+    */
 };

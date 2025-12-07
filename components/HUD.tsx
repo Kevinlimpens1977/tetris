@@ -29,16 +29,17 @@ const HUD: React.FC<HUDProps> = ({ stats, nextPiece, ghostEnabled = false, onTog
       rounded-xl md:rounded-2xl 
       p-[1px] md:p-[2px]
       w-full flex-1 min-h-0
-      shadow-[0_0_15px_rgba(239,68,68,0.15)]
+      shadow-[0_0_15px_rgba(220,38,38,0.2)]
       transition-all duration-300
     `}>
-      <div className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,#b91c1c_0%,#ef4444_20%,#ffffff_25%,#ef4444_30%,#b91c1c_50%,#ef4444_70%,#ffffff_75%,#ef4444_80%,#b91c1c_100%)] animate-spin-slow opacity-50"></div>
-      <div className="relative w-full h-full bg-black/60 backdrop-blur-xl rounded-[calc(0.75rem-1px)] md:rounded-[calc(1rem-2px)] flex flex-col items-center justify-center p-2 md:p-3">
-        <div className={`text-[9px] md:text-xs font-bold text-${color}-300 uppercase tracking-[0.15em] mb-1 flex items-center gap-1.5 opacity-80`}>
+      {/* China Theme Border Gradient */}
+      <div className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,#b91c1c_0%,#fbbf24_20%,#b91c1c_40%,#fbbf24_60%,#b91c1c_80%,#fbbf24_100%)] animate-spin-slow opacity-60"></div>
+      <div className="relative w-full h-full bg-black/80 backdrop-blur-xl rounded-[calc(0.75rem-1px)] md:rounded-[calc(1rem-2px)] flex flex-col items-center justify-center p-2 md:p-3">
+        <div className={`text-[9px] md:text-xs font-bold text-${color}-300 uppercase tracking-[0.15em] mb-1 flex items-center gap-1.5 opacity-90`}>
           {icon && <span className="hidden sm:inline text-base">{icon}</span>} {label}
         </div>
-        <div className="flex items-baseline gap-1 relative z-10">
-          <span className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-mono font-black text-white drop-shadow-md truncate tracking-tight">
+        <div className="flex items-baseline gap-1 relative z-10 w-full justify-center">
+          <span className={`text-lg sm:text-2xl md:text-3xl lg:text-4xl font-mono font-black text-white drop-shadow-md truncate tracking-tight ${label === 'Loten' ? 'text-yellow-400' : ''}`}>
             {value}
           </span>
         </div>
@@ -70,12 +71,12 @@ const HUD: React.FC<HUDProps> = ({ stats, nextPiece, ghostEnabled = false, onTog
         rounded-xl md:rounded-2xl 
         p-[1px] md:p-[2px]
         w-full flex-[1.5] min-h-[100px] md:min-h-[140px]
-        shadow-[0_0_15px_rgba(239,68,68,0.15)]
+        shadow-[0_0_15px_rgba(234,179,8,0.2)]
         transition-all duration-300
       `}>
-        <div className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,#b91c1c_0%,#ef4444_20%,#ffffff_25%,#ef4444_30%,#b91c1c_50%,#ef4444_70%,#ffffff_75%,#ef4444_80%,#b91c1c_100%)] animate-spin-slow opacity-50"></div>
-        <div className="relative w-full h-full bg-black/60 backdrop-blur-xl rounded-[calc(0.75rem-1px)] md:rounded-[calc(1rem-2px)] flex flex-col items-center justify-center p-3 md:p-4">
-          <div className="text-[9px] md:text-xs font-bold text-blue-300 uppercase tracking-[0.15em] mb-2 flex items-center gap-1 opacity-80">
+        <div className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,#b91c1c_0%,#fbbf24_20%,#b91c1c_40%,#fbbf24_60%,#b91c1c_80%,#fbbf24_100%)] animate-spin-slow opacity-60"></div>
+        <div className="relative w-full h-full bg-black/80 backdrop-blur-xl rounded-[calc(0.75rem-1px)] md:rounded-[calc(1rem-2px)] flex flex-col items-center justify-center p-3 md:p-4">
+          <div className="text-[9px] md:text-xs font-bold text-yellow-500 uppercase tracking-[0.15em] mb-2 flex items-center gap-1 opacity-90">
             VOLGENDE
           </div>
           <div className="flex items-center justify-center flex-1 w-full relative z-10">
@@ -101,8 +102,8 @@ const HUD: React.FC<HUDProps> = ({ stats, nextPiece, ghostEnabled = false, onTog
             )}
             {!type && <span className="text-white/20 text-2xl font-black">?</span>}
           </div>
-          {/* Soft red spotlight at bottom */}
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/4 h-8 bg-gradient-to-t from-red-500/10 to-transparent blur-sm pointer-events-none"></div>
+          {/* Soft gold spotlight at bottom */}
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/4 h-8 bg-gradient-to-t from-yellow-500/10 to-transparent blur-sm pointer-events-none"></div>
         </div>
       </div>
     );
@@ -123,14 +124,14 @@ const HUD: React.FC<HUDProps> = ({ stats, nextPiece, ghostEnabled = false, onTog
             <span className="text-lg sm:text-xl md:text-2xl font-mono font-black text-red-300 drop-shadow-md">
               -{penalty}
             </span>
-            <span className="text-[8px] md:text-[10px] text-red-400/80 uppercase">per stuk</span>
+            <span className="text-[8px] md:text-[10px] text-red-400/80 uppercase">p/stuk</span>
           </div>
         </div>
       </div>
     );
   };
 
-  // Ghost Toggle Button (Christmas Tree Style)
+  // Ghost Toggle Button (Lantern Style)
   const GhostToggle = () => {
     if (!onToggleGhost) return null;
 
@@ -148,18 +149,18 @@ const HUD: React.FC<HUDProps> = ({ stats, nextPiece, ghostEnabled = false, onTog
         `}
       >
         <div className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,#b91c1c_0%,#ef4444_20%,#ffffff_25%,#ef4444_30%,#b91c1c_50%,#ef4444_70%,#ffffff_75%,#ef4444_80%,#b91c1c_100%)] animate-spin-slow opacity-50"></div>
-        <div className={`relative w-full h-full backdrop-blur-xl rounded-[calc(0.75rem-1px)] md:rounded-[calc(1rem-2px)] flex flex-col items-center justify-center p-2 md:p-3 transition-colors ${ghostEnabled ? 'bg-green-900/60' : 'bg-gray-900/60'
+        <div className={`relative w-full h-full backdrop-blur-xl rounded-[calc(0.75rem-1px)] md:rounded-[calc(1rem-2px)] flex flex-col items-center justify-center p-2 md:p-3 transition-colors ${ghostEnabled ? 'bg-red-900/60' : 'bg-gray-900/60'
           }`}>
-          <div className="text-[9px] md:text-xs font-bold text-green-300 uppercase tracking-[0.15em] mb-1 flex items-center gap-1.5 opacity-80">
+          <div className="text-[9px] md:text-xs font-bold text-red-300 uppercase tracking-[0.15em] mb-1 flex items-center gap-1.5 opacity-80">
             <span className="text-base">👻</span> GHOST
           </div>
-          <div className="flex items-center justify-center relative z-10">
-            <span className={`text-3xl md:text-4xl transition-all duration-300 ${ghostEnabled ? 'filter drop-shadow-[0_0_10px_rgba(55,255,139,0.8)]' : 'opacity-30 grayscale'
+          <div className="flex items-center justify-center relative z-10 w-full mb-1">
+            <span className={`text-2xl md:text-3xl transition-all duration-300 ${ghostEnabled ? 'filter drop-shadow-[0_0_10px_rgba(255,20,20,0.8)]' : 'opacity-30 grayscale'
               }`}>
-              🎄
+              🏮
             </span>
           </div>
-          <div className={`text-[8px] md:text-[9px] font-bold uppercase mt-1 ${ghostEnabled ? 'text-green-400' : 'text-gray-500'
+          <div className={`text-[8px] md:text-[9px] font-bold uppercase ${ghostEnabled ? 'text-red-400' : 'text-gray-500'
             }`}>
             {ghostEnabled ? 'AAN' : 'UIT'}
           </div>
@@ -180,7 +181,15 @@ const HUD: React.FC<HUDProps> = ({ stats, nextPiece, ghostEnabled = false, onTog
           label="Score"
           value={stats.score.toLocaleString()}
           color="cyan"
-          icon="⭐"
+          icon="🐉"
+        />
+
+        {/* LOTTERY TICKETS */}
+        <StatBox
+          label="Loten"
+          value={stats.lotteryTickets}
+          color="yellow"
+          icon="🎟️"
         />
 
         {/* LINES */}
@@ -191,12 +200,12 @@ const HUD: React.FC<HUDProps> = ({ stats, nextPiece, ghostEnabled = false, onTog
           icon="☰"
         />
 
-        {/* LEVEL (Hidden on very small screens if needed, or compact) */}
+        {/* LEVEL */}
         <StatBox
           label="Niveau"
           value={stats.level}
           color="purple"
-          icon="📶"
+          icon="🎋"
         />
       </div>
 
@@ -215,7 +224,7 @@ const HUD: React.FC<HUDProps> = ({ stats, nextPiece, ghostEnabled = false, onTog
         </div>
       </div>
 
-      {/* Ghost Active Badge - Desktop only or small on mobile? */}
+      {/* Ghost Active Badge */}
       {ghostEnabled && (
         <div className="hidden md:block order-3">
           <GhostActiveBadge />

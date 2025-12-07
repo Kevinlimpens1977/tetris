@@ -10,10 +10,10 @@ import GameBoard from './components/GameBoard';
 import GameOverScreen from './components/GameOverScreen';
 import LevelUpScreen from './components/LevelUpScreen';
 import DebugPanel from './components/DebugPanel';
-import SnowEffect, { SnowEffectHandle } from './components/SnowEffect';
+import ChinaBackground, { ChinaBackgroundHandle } from './components/ChinaBackground';
 import LeaderboardModal from './components/LeaderboardModal';
 import { GameState, PlayerStats, TetrominoType, UserData, LeaderboardEntry, GameAction, PenaltyAnimation } from './types';
-import { BOARD_WIDTH, BOARD_HEIGHT, TETROMINOS, TETROMINO_KEYS } from './constants';
+import { BOARD_WIDTH, BOARD_HEIGHT, TETROMINOS, TETROMINO_KEYS, LOTTERY_THRESHOLDS } from './constants';
 import { supabase, submitScore, getLeaderboard, ensurePlayerVerified } from './services/supabase';
 
 // -- Gravity Function: Professional 10-level system --
@@ -97,6 +97,7 @@ const App: React.FC = () => {
     score: 0,
     lines: 0,
     level: 1,
+    lotteryTickets: 0
   });
 
   // Ghost piece control - default OFF, allowed for levels 1-2 and 7-10
@@ -124,7 +125,7 @@ const App: React.FC = () => {
   const dropIntervalRef = useRef<number>(1000);
   const ghostEnabledRef = useRef(ghostEnabled);
 
-  const snowEffectRef = useRef<SnowEffectHandle>(null);
+  const backgroundRef = useRef<ChinaBackgroundHandle>(null);
 
   // Touch Handling Refs
   const touchRef = useRef({
@@ -222,15 +223,24 @@ const App: React.FC = () => {
       }
     });
 
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
+
+    // return () => {
+    //   authListener.subscription.unsubscribe();
+    // };
   }, []);
 
   // --- Logic ---
 
-  const triggerVisualAction = (type: 'ROTATE' | 'DROP' | 'MOVE' | 'LOCK') => {
-    setLastAction({ type, id: Date.now() });
+  const triggerVisualAction = (
+    type: 'ROTATE' | 'DROP' | 'MOVE' | 'LOCK',
+    payload?: {
+      x?: number;
+      y?: number;
+      tetromino?: TetrominoType;
+      rotation?: number;
+    }
+  ) => {
+    setLastAction({ type, id: Date.now(), payload });
   };
 
   const checkCollision = (
@@ -279,7 +289,12 @@ const App: React.FC = () => {
       return;
     }
 
-    triggerVisualAction('LOCK');
+    triggerVisualAction('LOCK', {
+      x: piece.pos.x,
+      y: piece.pos.y,
+      tetromino: piece.tetromino,
+      rotation: piece.rotation
+    });
 
     // === GHOST PENALTY SYSTEM ===
     // Apply penalty if ghost is enabled
@@ -368,6 +383,7 @@ const App: React.FC = () => {
 
     // Update stats (score persists across levels)
     setStats({
+      ...currentStats,
       score: currentStats.score + points,
       lines: newLines,
       level: newLevel
@@ -428,8 +444,20 @@ const App: React.FC = () => {
 
     const newScore = statsRef.current.score;
 
-    // Submit to Supabase
-    await submitScore(newScore);
+    // Calculate Lottery Tickets
+    let tickets = 0;
+    if (newScore >= LOTTERY_THRESHOLDS.TIER_3) tickets = 5;
+    else if (newScore >= LOTTERY_THRESHOLDS.TIER_2) tickets = 2;
+    else if (newScore >= LOTTERY_THRESHOLDS.TIER_1) tickets = 1;
+
+    console.log(`🎮 Game Over! Score: ${newScore}, Tickets Earned: ${tickets}`);
+
+    // Update local stats first so UI can show it
+    setStats(prev => ({ ...prev, lotteryTickets: tickets }));
+
+    // Submit to Supabase - Note: We probably need to update submitScore to handle tickets if the backend supports it
+    // For now we just submit score, assuming tickets are derived or added later
+    await submitScore(newScore, tickets);
 
     // Refresh Leaderboard
     const newLeaderboard = await getLeaderboard();
@@ -644,13 +672,13 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [ghostEnabled]); // Add ghostEnabled to dependencies
 
-  // Automatic Snow Clearing (Every 110 seconds)
+  // Automatic Background Interaction (Dragon Flyby)
   useEffect(() => {
     const interval = setInterval(() => {
-      if (snowEffectRef.current) {
-        snowEffectRef.current.triggerPlow();
+      if (backgroundRef.current) {
+        backgroundRef.current.triggerDragon();
       }
-    }, 110000); // 110 seconds
+    }, 60000); // Every 60 seconds (more frequent than plow)
 
     return () => clearInterval(interval);
   }, []);
@@ -692,8 +720,8 @@ const App: React.FC = () => {
 
   const startGame = () => {
     setGrid(Array.from({ length: BOARD_HEIGHT }, () => Array(BOARD_WIDTH).fill(0)));
-    setStats({ score: 0, lines: 0, level: 1 });
-    statsRef.current = { score: 0, lines: 0, level: 1 };
+    setStats({ score: 0, lines: 0, level: 1, lotteryTickets: 0 });
+    statsRef.current = { score: 0, lines: 0, level: 1, lotteryTickets: 0 };
 
     dropIntervalRef.current = getGravityForLevel(1); // Use gravity function
     setGhostEnabled(false); // Ghost starts OFF - user must enable manually
@@ -750,7 +778,7 @@ const App: React.FC = () => {
     <div className="relative w-full h-[100dvh] flex flex-col bg-transparent overflow-hidden touch-none overscroll-none select-none">
 
       {/* Background Ambience */}
-      <SnowEffect ref={snowEffectRef} />
+      <ChinaBackground ref={backgroundRef} />
 
       {/* Close Button - Always top-right, above everything */}
       {gameState === GameState.PLAYING && (
@@ -760,7 +788,7 @@ const App: React.FC = () => {
           title="Verlaten / Pauze"
         >
           <div className="relative w-12 h-12 md:w-16 md:h-16">
-            <div className="absolute inset-0 text-4xl md:text-5xl drop-shadow-md">🎅</div>
+            <div className="absolute inset-0 text-4xl md:text-5xl drop-shadow-md">🐉</div>
             <div className="absolute bottom-0 right-0 bg-red-600 text-white rounded-full w-5 h-5 md:w-6 md:h-6 flex items-center justify-center text-[10px] md:text-xs font-bold border border-white shadow-lg animate-pulse-fast">
               ✕
             </div>
